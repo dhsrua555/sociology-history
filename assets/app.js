@@ -459,27 +459,184 @@
     checkEmpty();
   }
 
-  /* ───────── 사상 비교 ───────── */
-  function who() {
-    var w = (Array.isArray(S.who) ? S.who : ORDER).filter(function (id) { return T[id]; });
-    if (!w.length) w = ORDER.slice();
-    return ORDER.filter(function (id) { return w.indexOf(id) >= 0; });
+  /* ───────── 사상 비교: 슬라이드 마크업 ───────── */
+  function splitSrc(t) { var m = /\s@([^@]+)$/.exec(t); return m ? [t.slice(0, m.index), m[1].trim()] : [t, '']; }
+  function colorFor(label) { var s = plain(label || ''); for (var i = 0; i < ORDER.length; i++) if (s.indexOf(T[ORDER[i]].short) === 0) return T[ORDER[i]].color; return ''; }
+  function chipOf(s) { return s ? '<span class="chip src">' + esc(s) + '</span>' : ''; }
+  function slideHTML(src) {
+    var out = '';
+    String(src || '').replace(/\r/g, '').split(/\n\s*\n/).forEach(function (chunk) {
+      var lines = chunk.split('\n').map(function (l) { return l.trim(); }).filter(Boolean);
+      if (!lines.length) return;
+      var m = /^\[(\w+)\]\s*(.*)$/.exec(lines[0]), type = m ? m[1] : 'note', head = m ? m[2].trim() : '';
+      var items = [], text = [], rows = [], cap = '', srcs = [];
+      (m ? lines.slice(1) : lines).forEach(function (l) {
+        if (/^@/.test(l)) { srcs.push(l.slice(1).trim()); return; }
+        if (/^= /.test(l)) { cap = l.slice(2); return; }
+        if (/^\|/.test(l)) { rows.push(l); return; }
+        if (/^- /.test(l)) {
+          var ps = splitSrc(l.slice(2)), t = ps[0], hot = /^\*/.test(t);
+          if (hot) t = t.slice(1);
+          var k = t.indexOf(' :: ');
+          items.push({ h: k >= 0 ? t.slice(0, k) : '', d: k >= 0 ? t.slice(k + 4) : t, s: ps[1], hot: hot });
+          return;
+        }
+        text.push(l);
+      });
+      var foot = (cap ? '<p class="cap">' + inline(cap) + '</p>' : '') + (srcs.length ? '<div class="srcs">' + srcs.map(chipOf).join('') + '</div>' : '');
+      var ttl = head && type !== 'big' && type !== 'why' && type !== 'quote' && type !== 'vs' ? '<p class="sl-h">' + inline(head) + '</p>' : '';
+      if (type === 'big') {
+        out += '<div class="sl sl-big"><p class="bg">' + inline(head) + '</p>' + (text.length ? '<p class="sub">' + inline(text.join(' ')) + '</p>' : '') + foot + '</div>';
+      } else if (type === 'flow') {
+        out += '<div class="sl sl-flow">' + ttl + '<ol class="flow' + (items.length > 4 ? ' long' : '') + '" style="--n:' + items.length + '">' + items.map(function (it, i) {
+          return '<li class="' + (it.hot ? 'hot' : '') + '" style="--i:' + i + '"><b>' + inline(it.h || it.d) + '</b>' + (it.h ? '<small>' + inline(it.d) + '</small>' : '') + chipOf(it.s) + '</li>';
+        }).join('') + '</ol>' + foot + '</div>';
+      } else if (type === 'vs') {
+        var hs = head.split(' | '), labeled = items.some(function (it) { return it.h; }), cl = colorFor(hs[0]), cr = colorFor(hs[1]);
+        out += '<div class="sl sl-vs"><div class="vsg' + (labeled ? '' : ' nolab') + (cl ? ' cl' : '') + '" style="' + (cl ? '--cl:' + cl + ';' : '') + (cr ? '--cr:' + cr : '') + '"><div class="vh l">' + inline(hs[0] || '') + '</div><div class="vx">VS</div><div class="vh r">' + inline(hs[1] || '') + '</div>' +
+          items.map(function (it, i) {
+            var c = it.d.split(' | ');
+            return '<div class="vk">' + (it.h ? inline(it.h) : '<i></i>') + '</div><div class="vc l" style="--i:' + i + '">' + inline(c[0] || '') + '</div><div class="vc r" style="--i:' + i + '">' + inline(c[1] || '') + chipOf(it.s) + '</div>';
+          }).join('') + '</div>' + foot + '</div>';
+      } else if (type === 'cards') {
+        out += '<div class="sl sl-cards">' + ttl + '<div class="cards">' + items.map(function (it, i) {
+          return '<div class="cd' + (it.hot ? ' hot' : '') + '" style="--i:' + i + '"><span class="no">' + two(i + 1) + '</span><b>' + inline(it.h || it.d) + '</b>' + (it.h ? '<p>' + inline(it.d) + '</p>' : '') + chipOf(it.s) + '</div>';
+        }).join('') + '</div>' + foot + '</div>';
+      } else if (type === 'why') {
+        out += '<div class="sl sl-why"><p class="wq"><span aria-hidden="true">?</span>' + inline(head) + '</p><ul>' + items.map(function (it, i) {
+          return '<li style="--i:' + i + '"><b>' + inline(it.h || it.d) + '</b>' + (it.h ? '<span>' + inline(it.d) + '</span>' : '') + chipOf(it.s) + '</li>';
+        }).join('') + '</ul>' + foot + '</div>';
+      } else if (type === 'quote') {
+        out += '<figure class="sl sl-quote"><blockquote>' + inline(text.join(' ')) + '</blockquote><figcaption>' + (head ? '<b>' + inline(head) + '</b>' : '') + srcs.map(chipOf).join('') + '</figcaption></figure>';
+      } else if (type === 'table') {
+        out += '<div class="sl sl-table">' + ttl + table(rows) + foot + '</div>';
+      } else {
+        out += '<div class="sl sl-note">' + inline(text.join(' ')) + foot + '</div>';
+      }
+    });
+    return out;
   }
-  function viewVs(r) {
-    var tp = topicById(r.anchor) || topicById(S.topic) || TOPICS[0], W = who();
-    var h = '<header class="vs-head"><span class="lbl">Compare</span><h1>사상 비교<i>.</i></h1><p>주제를 고르면 네 사람의 입장이 나란히 놓이고, 아래에 두 사람씩의 관계가 이어집니다. 보고 싶은 사람만 켜 두세요. 주제를 처음 열 때마다 당근 ' + REWARD.vs + '개.</p>' +
-      '<div class="pick" role="group" aria-label="비교할 사상가"><span class="lbl">비교할 사람</span>' + ORDER.map(function (tid) {
-        return '<button type="button" data-t="' + tid + '" aria-pressed="' + (W.indexOf(tid) >= 0) + '" style="--c:' + T[tid].color + '">' + mk(tid) + esc(T[tid].short) + '</button>';
-      }).join('') + '</div></header>';
-    h += '<div class="topicbar"><div class="seg" role="group" aria-label="주제">' + TOPICS.map(function (x) {
-      return '<button type="button" data-tp="' + x.id + '" aria-pressed="' + (!!tp && x.id === tp.id) + '">' + esc(x.label) + (x.exam ? '<span class="x">' + esc(x.exam.replace('족보 ', '')) + '</span>' : '') + '</button>';
-    }).join('') + '</div></div><div id="vsbody"></div>';
+  function slidePlain(src) { return String(src || '').replace(/^\[\w+\]/gm, ' ').replace(/@[^\n]*/g, ' ').replace(/ :: | \| /g, ' ').replace(/[*=|-]/g, ' ').replace(/\s+/g, ' ').trim(); }
+
+  /* ───────── 사상 비교: 화면 ───────── */
+  function sidesOf(tp) { return (tp && tp.sides) || {}; }
+  function tabsOf(tp) { return ORDER.filter(function (tid) { return sidesOf(tp)[tid]; }).concat(['wrap']); }
+  function pairById(id) { for (var i = 0; i < PAIRS.length; i++) if (PAIRS[i].id === id) return PAIRS[i]; return null; }
+  function vsCrumb(label, prev, next) {
+    return '<nav class="crumb"><a class="btn back2" href="#vs">' + BACK + '사상 비교</a><span class="lbl">' + label + '</span><span class="pn">' +
+      (prev ? '<a class="iconbtn" href="' + prev + '" aria-label="이전">' + BACK + '</a>' : '') + (next ? '<a class="iconbtn" href="' + next + '" aria-label="다음">' + ARROW + '</a>' : '') + '</span></nav>';
+  }
+  function viewVsHub() {
+    var h = '<header class="vs-head"><span class="lbl">Compare</span><h1>사상 비교<i>.</i></h1><p>주제를 고르면 네 사람의 핵심이 한 줄씩 나란히 놓이고, 한 사람씩 슬라이드처럼 넘겨 보며 자세히 볼 수 있습니다. 주제를 처음 열 때마다 당근 ' + REWARD.vs + '개.</p></header>';
+    h += '<section class="band"><div class="band-h"><div><span class="lbl">01 · Topics</span><h2>주제로 비교하기<i>.</i></h2></div><p>점 네 개는 네 사람입니다. 채워진 점은 그 사람이 이 주제를 직접 다룬다는 뜻입니다.</p></div><div class="tgrid">' +
+      TOPICS.map(function (tp, i) {
+        var seen = S.earned['vs.' + tp.id] != null;
+        return '<a class="tcard fx tilt" data-tilt="6" href="#vs.' + tp.id + '" style="--i:' + i + '"><span class="no">' + two(i + 1) + '</span><b>' + esc(tp.label) + '</b><small>' + esc(tp.q) + '</small>' +
+          '<span class="dots">' + ORDER.map(function (tid) { return '<i class="' + (sidesOf(tp)[tid] ? 'on' : '') + '" style="--c:' + T[tid].color + '" title="' + esc(T[tid].short) + '"></i>'; }).join('') + '</span>' +
+          (tp.exam ? '<span class="chip pink">' + esc(tp.exam) + '</span>' : '') + (seen ? '<span class="seen" title="열어 봄">✓</span>' : '') + '</a>';
+      }).join('') + '</div></section>';
+    h += '<section class="band"><div class="band-h"><div><span class="lbl">02 · Pairs</span><h2>두 사람씩 맞붙이기<i>.</i></h2></div><p>두 사람의 입장을 왼쪽·오른쪽에 놓고 주제별로 맞대어 봅니다.</p></div><div class="pgrid">' +
+      PAIRS.filter(function (p) { return T[p.a] && T[p.b]; }).map(function (p, i) {
+        return '<a class="pcard fx" href="#vs-pr.' + p.id + '" style="--i:' + i + ';--ca:' + T[p.a].color + ';--cb:' + T[p.b].color + '"><span class="duo">' + mk(p.a) + '<em>VS</em>' + mk(p.b) + '</span><b>' + esc(T[p.a].short + ' × ' + T[p.b].short) + '</b><span class="t">' + esc(p.title) + '</span><small>' + esc(p.line) + '</small>' + (p.exam ? '<span class="chip pink">' + esc(p.exam) + '</span>' : '') + '</a>';
+      }).join('') + '</div></section>';
+    h += '<section class="band"><div class="band-h"><div><span class="lbl">03 · More</span><h2>더 넓게 보기<i>.</i></h2></div></div><div class="mgrid">' +
+      '<a class="mcard fx" href="#vs-all"><b>한눈에 표</b><small>11개 주제 × 네 사람의 한 줄 핵심을 표 하나에</small>' + ARROW + '</a>' +
+      '<a class="mcard fx" href="#vs-lin"><b>받은 영향과 물려준 유산</b><small>누구에게 배웠고, 누구에게 넘겨주었나</small>' + ARROW + '</a></div></section>';
     return h;
+  }
+  function glanceHTML(tp, tab) {
+    return '<section class="glance" aria-label="네 사람 한눈에"><div class="gl">' + ORDER.map(function (tid) {
+      var sd = sidesOf(tp)[tid], t = T[tid];
+      if (!sd) return '<div class="gcard off" style="--c:' + t.color + '"><span class="hd">' + mk(tid) + '<b>' + esc(t.short) + '</b></span><p>자료에서 직접 다루지 않습니다.</p></div>';
+      return '<button type="button" class="gcard" data-tab="' + tid + '" aria-pressed="' + (tab === tid) + '" style="--c:' + t.color + '"><span class="hd">' + mk(tid) + '<b>' + esc(t.short) + '</b></span><p>' + inline(sd.key) + '</p></button>';
+    }).join('') + '</div></section>';
+  }
+  function tabsHTML(tp, tab) {
+    return '<div class="stabs" role="tablist" aria-label="보고 싶은 사람">' + tabsOf(tp).map(function (id) {
+      var on = id === tab;
+      return '<button type="button" role="tab" data-tab="' + id + '" aria-selected="' + on + '"' + (id === 'wrap' ? ' class="wr"' : ' style="--c:' + T[id].color + '"') + '>' + (id === 'wrap' ? '차이 정리' : mk(id) + esc(T[id].short)) + '</button>';
+    }).join('') + '<span class="kb" aria-hidden="true">← → 키로 넘기기</span></div>';
+  }
+  function pairMini(p, x) {
+    return '<a class="pmini" href="#vs-pr.' + p.id + '"><span class="duo">' + mk(p.a) + mk(p.b) + '</span><b>' + inline(x.t) + '</b><span class="ab"><span style="--c:' + T[p.a].color + '"><em>' + esc(T[p.a].short) + '</em>' + inline(x.a) + '</span><span style="--c:' + T[p.b].color + '"><em>' + esc(T[p.b].short) + '</em>' + inline(x.b) + '</span></span></a>';
+  }
+  function relatedPairs(tp, tid) {
+    var list = [];
+    PAIRS.forEach(function (p) {
+      if (!T[p.a] || !T[p.b] || (tid && p.a !== tid && p.b !== tid)) return;
+      p.points.forEach(function (x) { if (x.topic === tp.id) list.push(pairMini(p, x)); });
+    });
+    return list;
+  }
+  function panelHTML(tp, tab) {
+    var tabs = tabsOf(tp), i = tabs.indexOf(tab), prev = tabs[i - 1], next = tabs[i + 1];
+    function nm(id) { return id === 'wrap' ? '차이 정리' : T[id].short; }
+    var foot = '<footer class="sfoot">' + (prev ? '<button type="button" class="btn" data-tab="' + prev + '">' + BACK + esc(nm(prev)) + '</button>' : '<span></span>') +
+      '<span class="pg">' + two(i + 1) + ' / ' + two(tabs.length) + '</span>' + (next ? '<button type="button" class="btn pri" data-tab="' + next + '">' + esc(nm(next)) + ARROW + '</button>' : '<span></span>') + '</footer>';
+    if (tab === 'wrap') {
+      var rel = relatedPairs(tp, null), W = ORDER.filter(function (tid) { return T[tid]; });
+      return '<article class="slide wrap">' +
+        '<header class="sh"><span class="sq">차이 정리</span><span class="pg2">' + esc(tp.label) + '</span></header>' +
+        '<h2 class="skey">' + esc(tp.q) + '</h2>' +
+        '<div class="sbody">' + slideHTML(tp.wrap) + '</div>' +
+        (rel.length ? '<div class="sl sl-rel"><p class="sl-h">두 사람씩 맞대 보면</p><div class="relwrap">' + (W.length > 1 ? '<div class="relmap">' + relmap(tp, W) + '</div>' : '') + '<div class="pminis">' + rel.join('') + '</div></div></div>' : '') +
+        foot + '</article>';
+    }
+    var t = T[tab], sd = sidesOf(tp)[tab], rp = relatedPairs(tp, tab);
+    return '<article class="slide" style="--c:' + t.color + '">' +
+      '<header class="sh">' + mk(tab) + '<span class="who"><b>' + esc(t.name) + '</b><small>' + esc(t.en) + '</small></span><a class="to" href="#t-' + tab + '">강의 정리로 →</a></header>' +
+      '<h2 class="skey">' + inline(sd.key) + '</h2>' +
+      (sd.tags && sd.tags.length ? '<div class="stags">' + sd.tags.map(function (g) { return '<span>#' + esc(g) + '</span>'; }).join('') + '</div>' : '') +
+      '<div class="sbody">' + slideHTML(sd.body) + '</div>' +
+      (rp.length ? '<div class="sl sl-rel"><p class="sl-h">이 주제로 맞붙는 두 사람</p><div class="pminis">' + rp.join('') + '</div></div>' : '') +
+      foot + '</article>';
+  }
+  function viewVsTopic(r) {
+    var tp = topicById(r.anchor), i = TOPICS.indexOf(tp), tabs = tabsOf(tp), tab = tabs.indexOf(r.tab) >= 0 ? r.tab : tabs[0];
+    r.tab = tab;
+    var prev = TOPICS[i - 1], next = TOPICS[i + 1];
+    var h = vsCrumb('주제 ' + two(i + 1) + ' / ' + two(TOPICS.length), prev ? '#vs.' + prev.id : '', next ? '#vs.' + next.id : '');
+    h += '<header class="tp-head"><span class="no">' + two(i + 1) + '</span><div><h1>' + esc(tp.label) + '<i>.</i></h1><p class="q">' + esc(tp.q) + '</p></div>' +
+      (tp.exam ? '<a class="chip pink" href="#exam">' + esc(tp.exam) + ' →</a>' : '') + '</header>' +
+      (tp.lead ? '<blockquote class="tp-lead">' + inline(tp.lead) + '</blockquote>' : '');
+    h += glanceHTML(tp, tab) + tabsHTML(tp, tab) + '<section class="deck" id="deck">' + panelHTML(tp, tab) + '</section>';
+    h += '<nav class="th-nav vs-nav" aria-label="앞뒤 주제">' + (prev ? '<a href="#vs.' + prev.id + '"><small>← 이전 주제</small>' + esc(prev.label) + '</a>' : '') +
+      (next ? '<a class="next" href="#vs.' + next.id + '"><small>다음 주제 →</small>' + esc(next.label) + '</a>' : '') + '</nav>';
+    return h;
+  }
+  function setTab(id, dir) {
+    var r = cur; if (!r || r.sub !== 'topic') return;
+    var tp = topicById(r.anchor), tabs = tabsOf(tp); if (tabs.indexOf(id) < 0 || id === r.tab) return;
+    var back = tabs.indexOf(id) < tabs.indexOf(r.tab);
+    r.tab = id;
+    try { history.replaceState(null, '', '#vs.' + tp.id + '.' + id); } catch (e) { }
+    var deck = $('#deck'); deck.innerHTML = panelHTML(tp, id);
+    if (!reduced) { deck.classList.remove('in-l', 'in-r'); void deck.offsetWidth; deck.classList.add(back ? 'in-l' : 'in-r'); }
+    $$('.stabs [data-tab]').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.tab === id)); });
+    $$('.glance [data-tab]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.tab === id)); });
+    bindDeck();
+    var st = $('.stabs'); if (st && dir !== 'key') { var top = st.getBoundingClientRect().top + window.scrollY - 90; if (window.scrollY > top) window.scrollTo({ top: top, behavior: reduced ? 'auto' : 'smooth' }); }
+    schedule();
+  }
+  function centerTab() {
+    var st = $('.stabs'), b = st && $('[aria-selected="true"]', st);
+    if (b) st.scrollLeft = Math.max(0, b.offsetLeft - st.clientWidth / 2 + b.offsetWidth / 2);
+  }
+  function bindDeck() {
+    centerTab();
+    $$('.relmap .hit').forEach(function (el) { el.addEventListener('click', function () { location.hash = '#vs-pr.' + el.dataset.pair; }); });
+    $$('.relmap .nd').forEach(function (el) { el.addEventListener('click', function () { setTab(el.dataset.t); }); });
+  }
+  function bindVsTopic(r) {
+    var tp = topicById(r.anchor);
+    bindDeck();
+    var got = grant('vs.' + tp.id, REWARD.vs);
+    if (got) { setTimeout(function () { carrotFx(got, $('.tp-head h1')); checkAch(); }, 350); }
   }
   function relmap(tp, W) {
     var n = W.length, cx = 140, cy = 124, R0 = 88, pos = {};
     W.forEach(function (tid, i) { var a = Math.PI + i * 2 * Math.PI / n; pos[tid] = [cx + R0 * Math.cos(a), cy + R0 * Math.sin(a)]; });
-    var s = '<svg viewBox="0 -12 280 284" role="img" aria-label="선택한 사상가 사이의 관계">';
+    var s = '<svg viewBox="0 -12 280 284" role="img" aria-label="이 주제로 이어진 두 사람들">';
     PAIRS.forEach(function (p) {
       if (!pos[p.a] || !pos[p.b]) return;
       var a = pos[p.a], b = pos[p.b], hot = p.points.some(function (x) { return x.topic === tp.id; });
@@ -487,73 +644,55 @@
       s += '<path class="ln' + (hot ? ' on' : '') + '" d="' + d + '"/><path class="hit" data-pair="' + p.id + '" d="' + d + '"><title>' + esc(T[p.a].short + ' × ' + T[p.b].short + ' · ' + p.title) + '</title></path>';
     });
     W.forEach(function (tid) {
-      var p = pos[tid], t = T[tid], ly = p[1] < cy - 20 ? p[1] - 30 : p[1] + 40;
-      s += '<g class="nd" data-t="' + tid + '" style="transform-origin:' + p[0].toFixed(1) + 'px ' + p[1].toFixed(1) + 'px"><title>' + esc(t.name) + ' 강의 정리로</title><circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="20" stroke="' + t.color + '"/><text class="no" x="' + p[0].toFixed(1) + '" y="' + (p[1] + 4).toFixed(1) + '" style="fill:color-mix(in oklab, ' + t.color + ' 72%, #000)">' + NUM[tid] + '</text><text x="' + p[0].toFixed(1) + '" y="' + ly.toFixed(1) + '">' + esc(t.short) + '</text></g>';
+      var p = pos[tid], t = T[tid], ly = p[1] < cy - 20 ? p[1] - 30 : p[1] + 40, on = !!sidesOf(tp)[tid];
+      s += '<g class="nd' + (on ? '' : ' off') + '" data-t="' + tid + '" style="transform-origin:' + p[0].toFixed(1) + 'px ' + p[1].toFixed(1) + 'px"><title>' + esc(t.name) + '</title><circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="20" stroke="' + t.color + '"/><text class="no" x="' + p[0].toFixed(1) + '" y="' + (p[1] + 4).toFixed(1) + '" style="fill:color-mix(in oklab, ' + t.color + ' 72%, #000)">' + NUM[tid] + '</text><text x="' + p[0].toFixed(1) + '" y="' + ly.toFixed(1) + '">' + esc(t.short) + '</text></g>';
     });
-    return s + '</svg><p class="hint">분홍 선은 이 주제로 이어진 두 사람입니다. 선을 누르면 관계로 이동합니다.</p>';
+    return s + '</svg><p class="hint">분홍 선 = 이 주제로 맞붙는 두 사람. 선을 누르면 두 사람 비교로.</p>';
   }
-  function renderVsBody(tpId) {
-    var tp = topicById(tpId) || TOPICS[0], W = who(), box = $('#vsbody');
-    if (!tp || !box) return;
-    S.topic = tp.id; save();
-    $$('.topicbar [data-tp]').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.tp === tp.id); });
-    var h = '<div class="vs-lead"><div><div class="q">' + esc(tp.q) + '</div>' + (tp.lead ? '<p class="lead">' + inline(tp.lead) + '</p>' : '') +
-      (tp.exam ? '<p class="exam"><a class="chip pink" href="#exam">' + esc(tp.exam) + ' 문항 보기 →</a></p>' : '') + '</div>' +
-      (W.length > 1 ? '<div class="relmap">' + relmap(tp, W) + '</div>' : '') + '</div>';
-    h += '<div class="cols">' + W.map(function (tid, i) {
-      var t = T[tid], pts = (tp.points && tp.points[tid]) || [];
-      return '<article class="col fx" style="--c:' + t.color + ';--i:' + i + '"><a class="hd" href="#t-' + tid + '">' + mk(tid) + '<b>' + esc(t.name) + '</b><small>' + esc(t.en) + '</small></a>' +
-        (pts.length ? '<ul>' + pts.map(function (p) { return '<li>' + inline(p.t) + srcChip(p.s) + '</li>'; }).join('') + '</ul>' : '<p class="none">이 주제는 자료에서 직접 다루지 않습니다.</p>') + '</article>';
+  function viewVsPair(r) {
+    var p = pairById(r.anchor), list = PAIRS.filter(function (x) { return T[x.a] && T[x.b]; }), i = list.indexOf(p), prev = list[i - 1], next = list[i + 1];
+    var A = T[p.a], B = T[p.b];
+    var pts = p.points.slice().sort(function (x, y) { return TOPICS.indexOf(topicById(x.topic)) - TOPICS.indexOf(topicById(y.topic)); });
+    var h = vsCrumb('두 사람씩 · ' + two(i + 1) + ' / ' + two(list.length), prev ? '#vs-pr.' + prev.id : '', next ? '#vs-pr.' + next.id : '');
+    h += '<header class="pr-head"><div class="duo-big"><a class="who l" href="#t-' + p.a + '" style="--c:' + A.color + '">' + mk(p.a) + '<b>' + esc(A.name) + '</b><small>' + esc(A.en) + ' · ' + esc(A.life) + '</small></a><span class="vsx">VS</span><a class="who r" href="#t-' + p.b + '" style="--c:' + B.color + '">' + mk(p.b) + '<b>' + esc(B.name) + '</b><small>' + esc(B.en) + ' · ' + esc(B.life) + '</small></a></div>' +
+      '<h1>' + esc(p.title) + '<i>.</i></h1><p class="line">' + esc(p.line) + '</p>' + (p.exam ? '<a class="chip pink" href="#exam">' + esc(p.exam) + ' →</a>' : '') + '</header>';
+    h += '<div class="plist">' + pts.map(function (x, k) {
+      var tp = topicById(x.topic);
+      return '<article class="pslide" style="--i:' + k + ';--ca:' + A.color + ';--cb:' + B.color + '"><div class="ptop">' + (tp ? '<a class="chip" href="#vs.' + tp.id + '">' + two(TOPICS.indexOf(tp) + 1) + ' ' + esc(tp.label) + '</a>' : '') + '<span class="k">' + two(k + 1) + '</span></div>' +
+        '<h3>' + inline(x.t) + '</h3><div class="ab2"><div class="c l"><span class="nm">' + mk(p.a) + esc(A.short) + '</span><p>' + inline(x.a) + '</p></div><span class="vx" aria-hidden="true">VS</span><div class="c r"><span class="nm">' + mk(p.b) + esc(B.short) + '</span><p>' + inline(x.b) + '</p></div></div>' +
+        (x.note ? '<p class="pnote">' + inline(x.note) + '</p>' : '') + '<div class="srcs">' + chipOf(x.s) + '</div></article>';
     }).join('') + '</div>';
-
-    var prs = PAIRS.filter(function (p) { return W.indexOf(p.a) >= 0 && W.indexOf(p.b) >= 0; });
-    if (prs.length) {
-      h += '<div class="sec-h"><div><span class="lbl">Pairs</span><h2>두 사람씩 보면</h2></div><p>‘' + esc(tp.label) + '’와 이어지는 대목을 먼저 보여 줍니다. 나머지는 펼쳐서 볼 수 있습니다.</p></div><div class="pairs">' + prs.map(function (p) {
-        var hot = p.points.filter(function (x) { return x.topic === tp.id; }), rest = p.points.filter(function (x) { return x.topic !== tp.id; });
-        function li(x, isHot) { var tt = topicById(x.topic); return '<li' + (isHot ? ' class="hot"' : '') + '>' + (tt && !isHot ? '<span class="tp">' + esc(tt.label) + '</span>' : '') + inline(x.t) + srcChip(x.s) + '</li>'; }
-        return '<article class="pair fx" id="pr-' + p.id + '"><div class="hd">' + mk(p.a) + mk(p.b) + '<b>' + esc(T[p.a].short + ' × ' + T[p.b].short) + '</b><span class="t">' + esc(p.title) + '</span>' + (p.exam ? '<span class="chip pink">' + esc(p.exam) + '</span>' : '') + '</div><p class="line">' + esc(p.line) + '</p>' +
-          (hot.length ? '<ul>' + hot.map(function (x) { return li(x, true); }).join('') + '</ul>' : '<p class="none">이 주제로 직접 이어진 대목은 없습니다.</p>') +
-          (rest.length ? '<details><summary>다른 주제 ' + rest.length + '개</summary><ul>' + rest.map(function (x) { return li(x, false); }).join('') + '</ul></details>' : '') + '</article>';
-      }).join('') + '</div>';
-    }
-
-    function inflLi(x) { return '<li><span class="nm">' + x.who.filter(function (w) { return T[w]; }).map(mk).join('') + esc(x.label) + '<small>' + esc(x.sub) + '</small></span><p>' + inline(x.t) + srcChip(x.s) + '</p></li>'; }
-    var ins = INFL.filter(function (x) { return x.dir === 'in' && x.who.some(function (w) { return W.indexOf(w) >= 0; }); });
-    var outs = INFL.filter(function (x) { return x.dir === 'out' && x.who.some(function (w) { return W.indexOf(w) >= 0; }); });
-    if (ins.length || outs.length) {
-      h += '<div class="sec-h"><div><span class="lbl">Lineage</span><h2>받은 영향과 물려준 유산</h2></div><p>이름 앞 번호는 그 영향과 이어진 사상가입니다.</p></div><div class="infl"><div><h3>받은 영향</h3><ul>' + ins.map(inflLi).join('') + '</ul></div><div><h3>물려준 유산</h3><ul>' + outs.map(inflLi).join('') + '</ul></div></div>';
-    }
-
-    h += '<div class="sec-h"><div><span class="lbl">Overview</span><h2>모든 주제 한눈에</h2></div></div><details class="overview"><summary>주제 × 사상가 표 펼치기</summary><div class="tbl"><table><thead><tr><th>주제</th>' + W.map(function (tid) { return '<th>' + mk(tid) + esc(T[tid].short) + '</th>'; }).join('') + '</tr></thead><tbody>' +
-      TOPICS.map(function (x) { return '<tr><td><button type="button" data-tp="' + x.id + '">' + esc(x.label) + '</button></td>' + W.map(function (tid) { var p = x.points && x.points[tid]; return '<td>' + (p && p.length ? inline(p[0].t) : '<span class="muted">—</span>') + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div></details>';
-    box.innerHTML = h;
-    $$('.relmap .hit', box).forEach(function (el) {
-      el.addEventListener('click', function () { var c = $('#pr-' + el.dataset.pair); if (c) { $$('.pair').forEach(function (p) { p.classList.remove('focus'); }); c.classList.add('focus'); c.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' }); } });
-    });
-    $$('.relmap .nd', box).forEach(function (el) { el.addEventListener('click', function () { location.hash = '#t-' + el.dataset.t; }); });
-    $$('.overview [data-tp]', box).forEach(function (b) { b.addEventListener('click', function () { setTopic(b.dataset.tp, true); }); });
-    var got = grant('vs.' + tp.id, REWARD.vs);
-    if (got) { carrotFx(got, $('.topicbar [aria-pressed="true"]')); checkAch(); }
+    h += '<nav class="th-nav vs-nav" aria-label="앞뒤 쌍">' + (prev ? '<a href="#vs-pr.' + prev.id + '"><small>← 이전</small>' + esc(T[prev.a].short + ' × ' + T[prev.b].short) + '</a>' : '') +
+      (next ? '<a class="next" href="#vs-pr.' + next.id + '"><small>다음 →</small>' + esc(T[next.a].short + ' × ' + T[next.b].short) + '</a>' : '') + '</nav>';
+    return h;
   }
-  function setTopic(id, scroll) {
-    try { history.replaceState(null, '', '#vs.' + id); } catch (e) { }
-    renderVsBody(id);
-    if (scroll) { var tb = $('.topicbar'); if (tb) window.scrollTo({ top: Math.max(0, tb.getBoundingClientRect().top + window.scrollY - 120), behavior: reduced ? 'auto' : 'smooth' }); }
+  function viewVsAll() {
+    var h = vsCrumb('한눈에 표', '', '') + '<header class="vs-head"><span class="lbl">Overview</span><h1>한눈에 표<i>.</i></h1><p>칸을 누르면 그 사람의 슬라이드로 갑니다.</p></header>';
+    h += '<div class="tbl overview2"><table><thead><tr><th>주제</th>' + ORDER.map(function (tid) { return '<th style="--c:' + T[tid].color + '">' + mk(tid) + esc(T[tid].short) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      TOPICS.map(function (tp, i) {
+        return '<tr><th scope="row"><a href="#vs.' + tp.id + '"><span class="mk">' + two(i + 1) + '</span>' + esc(tp.label) + '</a></th>' + ORDER.map(function (tid) {
+          var sd = sidesOf(tp)[tid];
+          return '<td>' + (sd ? '<a href="#vs.' + tp.id + '.' + tid + '">' + inline(sd.key) + '</a>' : '<span class="muted">—</span>') + '</td>';
+        }).join('') + '</tr>';
+      }).join('') + '</tbody></table></div>';
+    return h;
   }
-  function bindVs(r) {
-    $$('.topicbar [data-tp]').forEach(function (b) { b.addEventListener('click', function () { setTopic(b.dataset.tp, false); }); });
-    $$('.pick [data-t]').forEach(function (b) {
-      b.addEventListener('click', function () {
-        var w = who(), id = b.dataset.t, i = w.indexOf(id);
-        if (i >= 0) { if (w.length === 1) return; w.splice(i, 1); } else w.push(id);
-        S.who = w; save();
-        $$('.pick [data-t]').forEach(function (x) { x.setAttribute('aria-pressed', who().indexOf(x.dataset.t) >= 0); });
-        renderVsBody(S.topic);
-      });
-    });
-    var tp = topicById(r.anchor) || topicById(S.topic) || TOPICS[0];
-    if (tp) renderVsBody(tp.id);
+  function viewVsLin() {
+    function card(x) { return '<li><span class="nm">' + x.who.filter(function (w) { return T[w]; }).map(mk).join('') + '<b>' + esc(x.label) + '</b><small>' + esc(x.sub) + '</small></span><p>' + inline(x.t) + chipOf(x.s) + '</p></li>'; }
+    var ins = INFL.filter(function (x) { return x.dir === 'in'; }), outs = INFL.filter(function (x) { return x.dir === 'out'; });
+    var h = vsCrumb('영향과 유산', '', '') + '<header class="vs-head"><span class="lbl">Lineage</span><h1>받은 영향과 물려준 유산<i>.</i></h1><p>이름 앞 번호는 그 영향과 이어진 사상가입니다.</p></header>';
+    h += '<div class="lin"><section><h2><span>IN</span>받은 영향</h2><ul>' + ins.map(card).join('') + '</ul></section><div class="lin-mid" aria-hidden="true">' + ORDER.map(function (tid) { return mk(tid); }).join('') + '</div><section><h2><span>OUT</span>물려준 유산</h2><ul>' + outs.map(card).join('') + '</ul></section></div>';
+    return h;
   }
+  function viewVs(r) {
+    if (r.sub === 'topic' && topicById(r.anchor)) return viewVsTopic(r);
+    if (r.sub === 'pair' && pairById(r.anchor)) return viewVsPair(r);
+    if (r.sub === 'all') return viewVsAll();
+    if (r.sub === 'lin') return viewVsLin();
+    r.sub = 'hub';
+    return viewVsHub();
+  }
+  function bindVs(r) { if (r.sub === 'topic') bindVsTopic(r); }
 
   /* ───────── 족보 ───────── */
   function viewExam() {
@@ -703,8 +842,11 @@
       t.questions.forEach(function (q, i) { IDX.push({ h: hashFor(tid, 'q', 'q' + i), t: t.short + ' · 질문 · ' + q.q, x: plain(q.a) }); });
     });
     READINGS.forEach(function (x) { if (T[x.thinker]) IDX.push({ h: hashFor(x.thinker, 'rd', 'r-' + x.id), t: '리딩 · ' + x.author + ' · ' + x.title, x: plain(x.gist + ' ' + x.body) }); });
-    TOPICS.forEach(function (tp) { var txt = ''; Object.keys(tp.points || {}).forEach(function (k) { (tp.points[k] || []).forEach(function (p) { txt += ' ' + (T[k] ? T[k].short : '') + ' ' + p.t; }); }); IDX.push({ h: '#vs.' + tp.id, t: '비교 · ' + tp.label, x: plain(tp.q + ' ' + (tp.lead || '') + txt) }); });
-    PAIRS.forEach(function (p) { if (T[p.a] && T[p.b]) IDX.push({ h: '#vs', t: '비교 · ' + T[p.a].short + ' × ' + T[p.b].short + ' · ' + p.title, x: plain(p.line + ' ' + p.points.map(function (x) { return x.t; }).join(' ')) }); });
+    TOPICS.forEach(function (tp) {
+      IDX.push({ h: '#vs.' + tp.id + '.wrap', t: '비교 · ' + tp.label + ' · 차이 정리', x: plain(tp.q + ' ' + (tp.lead || '')) + ' ' + slidePlain(tp.wrap) });
+      Object.keys(sidesOf(tp)).forEach(function (k) { if (!T[k]) return; var sd = tp.sides[k]; IDX.push({ h: '#vs.' + tp.id + '.' + k, t: '비교 · ' + tp.label + ' · ' + T[k].short, x: plain(sd.key) + ' ' + (sd.tags || []).join(' ') + ' ' + slidePlain(sd.body) }); });
+    });
+    PAIRS.forEach(function (p) { if (T[p.a] && T[p.b]) IDX.push({ h: '#vs-pr.' + p.id, t: '비교 · ' + T[p.a].short + ' × ' + T[p.b].short + ' · ' + p.title, x: plain(p.line + ' ' + p.points.map(function (x) { return x.t + ' ' + x.a + ' ' + x.b + ' ' + (x.note || ''); }).join(' ')) }); });
     if (EXAM) EXAM.parts.forEach(function (pt) { pt.qs.forEach(function (q) { IDX.push({ h: '#exam.e' + q.n, t: '족보 ' + q.n + '번', x: plain(q.text + ' ' + (q.box || '') + ' ' + (q.subs || []).join(' ') + ' ' + (q.outline || '')) }); }); });
   }
   function doSearch(q) {
@@ -730,8 +872,11 @@
   function parse(h) {
     h = (h || '').replace(/^#/, ''); var m;
     if ((m = h.match(/^t-([a-z]+)(?:-(q|tb|rd))?(?:\.([\w-]+))?$/)) && T[m[1]]) return { v: 't', id: m[1], tab: m[2] || 'l', anchor: m[3] || '' };
-    if ((m = h.match(/^vs(?:\.([\w-]+))?$/))) return { v: 'vs', anchor: m[1] || '' };
-    if (/^(map|timeline)/.test(h)) return { v: 'vs', anchor: '' };
+    if ((m = h.match(/^vs-pr\.([\w-]+)$/))) return { v: 'vs', sub: 'pair', anchor: m[1] };
+    if (h === 'vs-all') return { v: 'vs', sub: 'all' };
+    if (h === 'vs-lin') return { v: 'vs', sub: 'lin' };
+    if ((m = h.match(/^vs(?:\.([\w-]+))?(?:\.([\w-]+))?$/))) return { v: 'vs', sub: m[1] ? 'topic' : 'hub', anchor: m[1] || '', tab: m[2] || '' };
+    if (/^(map|timeline)/.test(h)) return { v: 'vs', sub: 'hub' };
     if ((m = h.match(/^exam(?:\.([\w-]+))?$/))) return { v: 'exam', anchor: m[1] || '' };
     if ((m = h.match(/^closet(?:\.([\w-]+))?$/))) return { v: 'closet', anchor: m[1] || '' };
     return { v: 'home' };
@@ -745,7 +890,7 @@
   var cur = null;
   function render() {
     var r = parse(location.hash), kind = kindOf(cur, r);
-    if (cur && cur.v === 'vs' && r.v === 'vs') { var tp = topicById(r.anchor) || topicById(S.topic) || TOPICS[0]; if (tp) renderVsBody(tp.id); cur = r; return; }
+    if (cur && cur.sub === 'topic' && r.sub === 'topic' && cur.anchor === r.anchor && r.tab && r.tab !== cur.tab) { setTab(r.tab); return; }
     if (cur && cur.v === 'closet' && r.v === 'closet') { cur = r; return; }
     var step = kind === 'step';
     var html = r.v === 't' ? viewThinker(r) : r.v === 'vs' ? viewVs(r) : r.v === 'exam' ? viewExam() : r.v === 'closet' ? viewCloset(r) : viewHome();
@@ -845,8 +990,16 @@
   $('#sq').addEventListener('input', function (e) { doSearch(e.target.value); });
   $('#sres').addEventListener('click', function (e) { if (e.target.closest('a')) closeSearch(); });
   document.addEventListener('click', function (e) { var rb = e.target.closest && e.target.closest('.rb'); if (rb && !rb.closest('.curtain')) pet(rb); });
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('#app [data-tab]');
+    if (b && cur && cur.sub === 'topic') setTab(b.dataset.tab);
+  });
   document.addEventListener('keydown', function (e) {
     var tag = (document.activeElement || {}).tagName || '';
+    if (cur && cur.sub === 'topic' && (e.key === 'ArrowRight' || e.key === 'ArrowLeft') && !/INPUT|TEXTAREA|SELECT/.test(tag) && $('#search').hidden && !e.altKey && !e.metaKey && !e.ctrlKey) {
+      var tabs = tabsOf(topicById(cur.anchor)), k = tabs.indexOf(cur.tab) + (e.key === 'ArrowRight' ? 1 : -1);
+      if (tabs[k]) { e.preventDefault(); setTab(tabs[k], 'key'); }
+    }
     var rb = document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('rb') ? document.activeElement : null;
     if (rb && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); pet(rb); return; }
     if (e.key === '/' && !/INPUT|TEXTAREA/.test(tag)) { e.preventDefault(); openSearch(); }
