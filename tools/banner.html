@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>사회학사 배너</title>
+<!-- README 배너와 링크 미리보기 이미지의 원본. 헤드리스 Chrome 으로 1280×640 스크린샷을 찍어 assets/banner.png 를 만든다.
+     사상가 이름·번호·색·키워드는 data/*.js 에서, 토끼는 assets/rabbit.js 에서 가져온다. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Martian+Mono:wght@400;500;700&display=swap">
+<style>
+  :root {
+    --bg: #FFF6FA; --line: #F6DDE9; --ink: #2A1B24; --ink-2: #6B5563; --ink-3: #A08A97;
+    --pink: #FF3D9A; --pink-2: #FF7AB8; --pink-3: #FFD0E6; --pink-deep: #E0137A;
+    --grad: linear-gradient(120deg, #FF5FAE 0%, #FF3D9A 45%, #FF6FA0 100%);
+    --shadow: 0 18px 40px -26px rgba(190, 30, 110, .45), 0 2px 6px -3px rgba(190, 30, 110, .12);
+    --f-sans: 'IBM Plex Sans KR', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+    --f-mono: 'Martian Mono', 'IBM Plex Sans KR', monospace;
+  }
+  html, body { margin: 0; background: var(--bg); }
+  .b { position: relative; width: 1280px; height: 640px; overflow: hidden; background: var(--bg); color: var(--ink); font-family: var(--f-sans); isolation: isolate; word-break: keep-all; }
+  .b::before { content: ''; position: absolute; inset: 0; z-index: -1; background-image: radial-gradient(rgba(255, 61, 154, .17) 1.2px, transparent 1.6px); background-size: 26px 26px; }
+  .glow { position: absolute; z-index: -2; border-radius: 50%; }
+  .g1 { left: -260px; top: -320px; width: 820px; height: 820px; background: radial-gradient(closest-side, rgba(255, 110, 180, .34), transparent); }
+  .g2 { right: -300px; top: 60px; width: 760px; height: 760px; background: radial-gradient(closest-side, rgba(183, 156, 255, .28), transparent); }
+  .g3 { left: 360px; bottom: -420px; width: 700px; height: 700px; background: radial-gradient(closest-side, rgba(255, 196, 160, .32), transparent); }
+
+  .left { position: absolute; left: 72px; top: 70px; width: 660px; }
+  .eyebrow { display: flex; gap: 14px; font-family: var(--f-mono); font-size: 13px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+  .eyebrow b { color: var(--pink-deep); font-weight: 600; }
+  h1 { margin: 14px 0 0; font-size: 168px; font-weight: 700; letter-spacing: -.055em; line-height: .95; }
+  h1 i { font-style: normal; color: var(--pink); }
+  .en { margin: 18px 0 0; font-family: var(--f-mono); font-weight: 700; font-size: 23px; letter-spacing: -.04em; line-height: 1.25; color: var(--ink-2); white-space: nowrap; }
+  .en b { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .en .cur { display: inline-block; width: .5em; height: .9em; margin-left: .14em; vertical-align: -.08em; background: var(--pink); border-radius: 2px; }
+  .lede { margin: 20px 0 0; font-size: 20px; line-height: 1.6; color: var(--ink-2); max-width: 40ch; }
+  .who { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+  .who span { display: inline-flex; align-items: center; gap: 8px; padding: 5px 16px 5px 6px; border-radius: 999px; background: #fff; border: 1px solid var(--line); font-size: 17px; font-weight: 600; box-shadow: var(--shadow); }
+  .mk { display: inline-flex; align-items: center; justify-content: center; font-family: var(--f-mono); font-weight: 700; font-size: 12px; line-height: 1; padding: 6px 8px; border-radius: 999px; color: color-mix(in oklab, var(--c) 72%, #000); background: color-mix(in oklab, var(--c) 16%, #fff); }
+
+  .stage { position: absolute; right: 56px; top: 34px; width: 470px; height: 500px; }
+  .halo { position: absolute; left: 20px; top: 26px; width: 430px; height: 430px; border-radius: 50%; background: radial-gradient(circle at 50% 45%, #fff 0 30%, rgba(255, 208, 230, .9) 55%, rgba(255, 170, 210, .35) 72%, transparent 74%); }
+  .ring { position: absolute; left: 6px; top: 12px; width: 458px; height: 458px; }
+  .ring circle { fill: none; stroke: var(--pink-2); stroke-width: 1.2; stroke-dasharray: 2 9; stroke-linecap: round; }
+  .rb { position: absolute; left: 105px; top: 44px; width: 262px; --lx: -.55; --ly: .05; filter: drop-shadow(0 20px 22px rgba(190, 30, 110, .18)); }
+  .rb svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .rb .rb-face { transform: translate(calc(var(--lx) * 2.6px), calc(var(--ly) * 2px)); }
+  .rb .rb-hat { transform: translate(calc(var(--lx) * 1.4px), calc(var(--ly) * 1px)); }
+  .rb .rb-head { transform-origin: 60px 90px; transform: rotate(calc(var(--lx) * 3deg)); }
+  .rb .rb-ears { transform-origin: 60px 44px; transform: translateX(calc(var(--lx) * -1.4px)) rotate(calc(var(--lx) * -2deg)); }
+  .orb { position: absolute; width: 50px; height: 50px; display: grid; place-items: center; border-radius: 50%; background: #fff; box-shadow: var(--shadow); }
+  .orb svg { width: 26px; height: 26px; }
+  .bubble { position: absolute; left: -40px; top: 62px; background: #fff; border: 1px solid var(--pink-3); border-radius: 20px 20px 6px 20px; padding: 12px 18px; font-size: 17px; line-height: 1.5; box-shadow: var(--shadow); }
+  .bubble b { color: var(--pink-deep); }
+  .tag { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 7px 8px 7px 18px; box-shadow: var(--shadow); white-space: nowrap; font-size: 16px; }
+  .tag b { font-weight: 700; }
+  .tag span { display: inline-flex; align-items: center; gap: 6px; padding: 5px 13px; border-radius: 999px; background: rgba(255, 61, 154, .09); color: var(--pink-deep); font-weight: 600; }
+  .tag .cr { width: 17px; height: 17px; }
+
+  .strip { position: absolute; left: -40px; right: -40px; bottom: 30px; transform: rotate(-1.6deg); background: var(--grad); color: #fff; box-shadow: 0 20px 40px -24px rgba(255, 61, 154, .8); overflow: hidden; }
+  .strip div { display: flex; white-space: nowrap; }
+  .strip span { display: inline-flex; align-items: center; gap: 18px; padding: 12px 0 12px 18px; font-size: 18px; font-weight: 600; }
+  .strip span::after { content: '✦'; font-size: 12px; opacity: .8; }
+  .url { position: absolute; right: 64px; top: 30px; font-family: var(--f-mono); font-size: 12.5px; letter-spacing: .04em; color: var(--ink-3); }
+</style>
+</head>
+<body>
+<div class="b" id="b">
+  <span class="glow g1"></span><span class="glow g2"></span><span class="glow g3"></span>
+  <div class="left">
+    <div class="eyebrow"><span>History of Sociology</span><b>Part 01</b><span id="route"></span></div>
+    <h1>사회학사<i>.</i></h1>
+    <p class="en">Read it slowly, <b>compare</b> it side by side.<span class="cur"></span></p>
+    <p class="lede" id="lede"></p>
+    <div class="who" id="who"></div>
+  </div>
+  <div class="stage">
+    <div class="halo"></div>
+    <svg class="ring" viewBox="0 0 100 100"><circle cx="50" cy="50" r="48"/></svg>
+    <span class="orb" id="o1" style="left:44px;top:250px"></span>
+    <span class="orb" id="o2" style="right:4px;top:150px"></span>
+    <span class="orb" id="o3" style="right:34px;top:360px"></span>
+    <span class="rb" id="rb"></span>
+    <div class="bubble" id="bubble"></div>
+    <div class="tag" id="tag"></div>
+  </div>
+  <div class="strip"><div id="strip"></div></div>
+  <span class="url">dhsrua555.github.io/sociology-history</span>
+</div>
+<script src="../assets/rabbit.js"></script>
+<script src="../data/comte.js"></script>
+<script src="../data/spencer.js"></script>
+<script src="../data/marx.js"></script>
+<script src="../data/durkheim.js"></script>
+<script src="../data/readings.js"></script>
+<script src="../data/exam.js"></script>
+<script>
+(function () {
+  var R = window.RABBIT, E = window.ECRIN || {}, T = E.thinkers || {};
+  var ORDER = Object.keys(T).sort(function (a, b) { return (T[a].week || 0) - (T[b].week || 0) || (T[a].born || 0) - (T[b].born || 0); });
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+  var nSec = 0, keys = [];
+  ORDER.forEach(function (id) { nSec += (T[id].lecture || []).length; (T[id].keys || []).forEach(function (k) { keys.push(k); }); });
+  var nQ = E.exam ? E.exam.parts.reduce(function (a, p) { return a + p.qs.length; }, 0) : 0;
+  document.getElementById('route').textContent = ORDER.map(function (id) { return T[id].en.split(' ').pop(); }).join(' → ');
+  document.getElementById('lede').innerHTML = '강의 녹음과 교안을 한 절씩, 사상은 주제별로 나란히.<br>강의 ' + nSec + '절 · 리딩 ' + (E.readings || []).length + '편 · 족보 ' + nQ + '문항.';
+  document.getElementById('who').innerHTML = ORDER.map(function (id, i) { return '<span><i class="mk" style="--c:' + T[id].color + ';font-style:normal">0' + (i + 1) + '</i>' + esc(T[id].short || T[id].name) + '</span>'; }).join('');
+  document.getElementById('rb').innerHTML = R.render(R.DEFAULT);
+  document.getElementById('o1').innerHTML = '<svg viewBox="0 0 24 24"><path d="' + R.heart(12, 12.5, 8) + '" fill="#FF3D9A"/></svg>';
+  document.getElementById('o2').innerHTML = R.CARROT;
+  document.getElementById('o3').innerHTML = '<svg viewBox="0 0 24 24"><path d="' + R.spark(12, 12, 10) + '" fill="#FFC93C"/></svg>';
+  document.getElementById('bubble').innerHTML = '한 절 읽을 때마다<br>당근 <b>+5</b>!';
+  var n = R.ITEMS.filter(function (it) { return it.price || it.ach; }).length;
+  document.getElementById('tag').innerHTML = '<b>흰토끼 콩이</b><span>' + R.CARROT + '옷장 아이템 ' + n + '개</span>';
+  var s = keys.map(function (k) { return '<span>' + esc(k) + '</span>'; }).join('');
+  document.getElementById('strip').innerHTML = s + s;
+})();
+</script>
+</body>
+</html>
