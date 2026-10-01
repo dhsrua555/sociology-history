@@ -90,6 +90,7 @@
 <script src="../data/spencer.js"></script>
 <script src="../data/marx.js"></script>
 <script src="../data/durkheim.js"></script>
+<script src="../data/weber.js"></script>
 <script src="../data/readings.js"></script>
 <script src="../data/exam.js"></script>
 <script>
@@ -99,7 +100,7 @@
   function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
   var nSec = 0, keys = [];
   ORDER.forEach(function (id) { nSec += (T[id].lecture || []).length; (T[id].keys || []).forEach(function (k) { keys.push(k); }); });
-  var nQ = E.exam ? E.exam.parts.reduce(function (a, p) { return a + p.qs.length; }, 0) : 0;
+  var nQ = (E.exams || (E.exam ? [E.exam] : [])).reduce(function (a, ex) { return a + ex.parts.reduce(function (b, p) { return b + p.qs.length; }, 0); }, 0);
   document.getElementById('route').textContent = ORDER.map(function (id) { return T[id].en.split(' ').pop(); }).join(' → ');
   document.getElementById('lede').innerHTML = '강의 녹음과 교안을 한 절씩, 사상은 주제별로 나란히.<br>강의 ' + nSec + '절 · 리딩 ' + (E.readings || []).length + '편 · 족보 ' + nQ + '문항.';
   document.getElementById('who').innerHTML = ORDER.map(function (id, i) { return '<span><i class="mk" style="--c:' + T[id].color + ';font-style:normal">0' + (i + 1) + '</i>' + esc(T[id].short || T[id].name) + '</span>'; }).join('');

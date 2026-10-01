@@ -8,13 +8,16 @@
   var PAIRS = E.pairs || [];
   var INFL = E.influences || [];
   var READINGS = E.readings || [];
-  var EXAM = E.exam || null;
+  var EXAMS = E.exams || (E.exam ? [E.exam] : []);
+  var QBY = {};
+  EXAMS.forEach(function (ex) { ex.parts.forEach(function (p) { p.qs.forEach(function (q) { q.id = (ex.pre || '') + q.n; q.ex = ex; q.label = q.no ? (p.tag || p.kind) + ' ' + q.no : q.n + '번'; QBY[q.id] = q; }); }); });
   var reduced = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : false;
 
   /* 사상가 목록은 데이터에서 만든다 — 새 사상가 파일을 넣으면 자동으로 늘어난다 */
   var PALETTE = ['#5B6CFF', '#F29D12', '#FF5A4E', '#9B5CFF', '#16B39A', '#F0508C', '#6DBA3A', '#2E9BE6'];
   var ORDER = Object.keys(T).sort(function (a, b) { return (T[a].week || 0) - (T[b].week || 0) || (T[a].born || 0) - (T[b].born || 0); });
   var NUM = {};
+  var NW = ['', '한', '두', '세', '네', '다섯', '여섯', '일곱', '여덟', '아홉', '열'][ORDER.length] || String(ORDER.length);
   ORDER.forEach(function (id, i) {
     var t = T[id];
     t.color = t.color || PALETTE[i % PALETTE.length];
@@ -53,7 +56,7 @@
       .replace(/==(.+?)==/g, '<mark>$1</mark>')
       .replace(/(^|[^*\w])\*([^*\s][^*]*?)\*(?!\*)/g, '$1<em>$2</em>');
   }
-  function plain(s) { return String(s || '').replace(/^:::.*$/gm, ' ').replace(/^\|[-: |]+\|?\s*$/gm, ' ').replace(/\*\*|==|^#+\s|^>\s?|^\s*([-*]|\d+\.)\s/gm, ' ').replace(/[|*]/g, ' ').replace(/\s+/g, ' ').trim(); }
+  function plain(s) { return String(s || '').replace(/^:::.*$/gm, ' ').replace(/^\[(big|flow|vs|cards|why|quote|table|note)\]/gm, ' ').replace(/ :: /g, ' ').replace(/^\|[-: |]+\|?\s*$/gm, ' ').replace(/\*\*|==|^#+\s|^>\s?|^\s*([-*]|\d+\.)\s/gm, ' ').replace(/[|*]/g, ' ').replace(/\s+/g, ' ').trim(); }
   function cut(s, n) { s = plain(s); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
   function two(n) { return (n < 10 ? '0' : '') + n; }
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
@@ -81,7 +84,9 @@
   function gainOf(key) { var g = rewardFor(key); return g && S.earned[g.k] == null ? g.amt : 0; }
   function lecKeys(tid) { return T[tid].lecture.map(function (s) { return tid + '.l.' + s.id; }); }
   function allKeys(kind) { var ks = []; ORDER.forEach(function (tid) { (kind === 'l' ? lecKeys(tid) : T[tid].textbook.map(function (s) { return tid + '.tb.' + s.id; })).forEach(function (k) { ks.push(k); }); }); return ks; }
-  function examOutlines() { var qs = []; if (EXAM) EXAM.parts.forEach(function (p) { p.qs.forEach(function (q) { if (q.outline) qs.push(q); }); }); return qs; }
+  function outlineOf(q) { if (q.outline) return q.outline; var s = q.same && QBY[q.same]; return s ? s.outline || '' : ''; }
+  function allExamQs() { var qs = []; EXAMS.forEach(function (ex) { ex.parts.forEach(function (p) { p.qs.forEach(function (q) { qs.push(q); }); }); }); return qs; }
+  function examOutlines() { return allExamQs().filter(function (q) { return !!outlineOf(q); }); }
   function lecBonus(tid) { var ks = lecKeys(tid); return ks.length && ks.every(function (k) { return S.read[k]; }) ? grant('lecall.' + tid, REWARD.lecall) : 0; }
   function syncPast() {
     var got = 0;
@@ -100,7 +105,7 @@
     lec: function () { var ks = allKeys('l'); return [ks.filter(function (k) { return S.read[k]; }).length, ks.length]; },
     tb: function () { var ks = allKeys('tb'); return [ks.filter(function (k) { return S.read[k]; }).length, ks.length]; },
     vs: function () { return [TOPICS.filter(function (t) { return S.earned['vs.' + t.id] != null; }).length, TOPICS.length]; },
-    exam: function () { var qs = examOutlines(); return [qs.filter(function (q) { return S.earned['ex.' + q.n] != null; }).length, qs.length]; },
+    exam: function () { var qs = examOutlines(); return [qs.filter(function (q) { return S.earned['ex.' + q.id] != null; }).length, qs.length]; },
     streak: function () { return [Math.min((S.visit && S.visit.best) || 0, 7), 7]; }
   };
   function achDone(a) { if (S.earned['ach.' + a] != null) return true; var p = ACHP[a](); return p[1] > 0 && p[0] >= p[1]; }
@@ -241,6 +246,12 @@
         i++; out.push(callout(m[1], m[2].trim(), inn)); continue;
       }
       if ((m = L.match(/^(#{2,3})\s+(.*)$/))) { flush(); out.push('<div class="b b-head">' + (m[1].length === 2 ? '<h3>' : '<h4>') + inline(m[2]) + (m[1].length === 2 ? '</h3>' : '</h4>') + '</div>'); i++; continue; }
+      /* 비교 슬라이드와 같은 시각 블록: [flow]·[vs]·[table]… 부터 빈 줄까지 */
+      if (/^\[(big|flow|vs|cards|why|quote|table|note)\]/.test(L)) {
+        flush(); var ch = [];
+        while (i < lines.length && !/^\s*$/.test(lines[i])) ch.push(lines[i++]);
+        out.push('<div class="b ' + (mode === 'lec' ? 'b-sum' : 'b-book') + ' b-vis">' + slideHTML(ch.join('\n')) + '</div>'); continue;
+      }
       buf.push(L); i++;
     }
     flush();
@@ -290,7 +301,7 @@
   function viewHome() {
     var cont = S.last ? '#' + S.last : '#t-' + ORDER[0];
     var nSec = 0; ORDER.forEach(function (tid) { nSec += T[tid].lecture.length; });
-    var nQ = EXAM ? EXAM.parts.reduce(function (a, p) { return a + p.qs.length; }, 0) : 0;
+    var nQ = allExamQs().length;
     var word = '사회학사'.split('').map(function (ch, i) { return '<span class="hl" style="--i:' + i + ';--tw:' + (i % 2 ? '-5deg' : '5deg') + '">' + ch + '</span>'; }).join('') + '<span class="hl dot" style="--i:4">.</span>';
     var h = '<section class="hero"><div class="hero-l"><div class="eyebrow"><span>History of Sociology</span><b>Part 01</b><span>' + esc(ORDER.map(function (tid) { return T[tid].en.split(' ').pop(); }).join(' → ')) + '</span></div>' +
       '<h1 aria-label="사회학사">' + word + '</h1><p class="en">Read it slowly, <b>compare</b> it side by side.<span class="cur" aria-hidden="true"></span></p>' +
@@ -317,7 +328,7 @@
     h += '</div></section>';
 
     if (TOPICS.length) {
-      h += '<section class="band"><div class="band-h"><div><span class="lbl">02 · Compare</span><h2>주제로 나란히 보기<i>.</i></h2></div><p>같은 질문에 네 사람이 각각 무엇이라 했는지 한 화면에 모았습니다. 문장마다 출처(교안·강의·교재·리딩)가 붙어 있습니다.</p></div><div class="topics2">' +
+      h += '<section class="band"><div class="band-h"><div><span class="lbl">02 · Compare</span><h2>주제로 나란히 보기<i>.</i></h2></div><p>같은 질문에 ' + NW + ' 사람이 각각 무엇이라 했는지 한 화면에 모았습니다. 문장마다 출처(교안·강의·교재·리딩)가 붙어 있습니다.</p></div><div class="topics2">' +
         TOPICS.map(function (tp, i) { return '<a class="fx tilt" data-tilt="7" href="#vs.' + tp.id + '" style="--i:' + i + '"><span class="mk">' + two(i + 1) + '</span><b>' + esc(tp.label) + '</b><small>' + esc(tp.q) + '</small>' + (tp.exam ? '<span class="chip pink">' + esc(tp.exam) + '</span>' : '') + '</a>'; }).join('') + '</div></section>';
     }
 
@@ -527,8 +538,8 @@
       (prev ? '<a class="iconbtn" href="' + prev + '" aria-label="이전">' + BACK + '</a>' : '') + (next ? '<a class="iconbtn" href="' + next + '" aria-label="다음">' + ARROW + '</a>' : '') + '</span></nav>';
   }
   function viewVsHub() {
-    var h = '<header class="vs-head"><span class="lbl">Compare</span><h1>사상 비교<i>.</i></h1><p>주제를 고르면 네 사람의 핵심이 한 줄씩 나란히 놓이고, 한 사람씩 슬라이드처럼 넘겨 보며 자세히 볼 수 있습니다. 주제를 처음 열 때마다 당근 ' + REWARD.vs + '개.</p></header>';
-    h += '<section class="band"><div class="band-h"><div><span class="lbl">01 · Topics</span><h2>주제로 비교하기<i>.</i></h2></div><p>점 네 개는 네 사람입니다. 채워진 점은 그 사람이 이 주제를 직접 다룬다는 뜻입니다.</p></div><div class="tgrid">' +
+    var h = '<header class="vs-head"><span class="lbl">Compare</span><h1>사상 비교<i>.</i></h1><p>주제를 고르면 ' + NW + ' 사람의 핵심이 한 줄씩 나란히 놓이고, 한 사람씩 슬라이드처럼 넘겨 보며 자세히 볼 수 있습니다. 주제를 처음 열 때마다 당근 ' + REWARD.vs + '개.</p></header>';
+    h += '<section class="band"><div class="band-h"><div><span class="lbl">01 · Topics</span><h2>주제로 비교하기<i>.</i></h2></div><p>점 ' + NW + ' 개는 ' + NW + ' 사람입니다. 채워진 점은 그 사람이 이 주제를 직접 다룬다는 뜻입니다.</p></div><div class="tgrid">' +
       TOPICS.map(function (tp, i) {
         var seen = S.earned['vs.' + tp.id] != null;
         return '<a class="tcard fx tilt" data-tilt="6" href="#vs.' + tp.id + '" style="--i:' + i + '"><span class="no">' + two(i + 1) + '</span><b>' + esc(tp.label) + '</b><small>' + esc(tp.q) + '</small>' +
@@ -540,12 +551,12 @@
         return '<a class="pcard fx" href="#vs-pr.' + p.id + '" style="--i:' + i + ';--ca:' + T[p.a].color + ';--cb:' + T[p.b].color + '"><span class="duo">' + mk(p.a) + '<em>VS</em>' + mk(p.b) + '</span><b>' + esc(T[p.a].short + ' × ' + T[p.b].short) + '</b><span class="t">' + esc(p.title) + '</span><small>' + esc(p.line) + '</small>' + (p.exam ? '<span class="chip pink">' + esc(p.exam) + '</span>' : '') + '</a>';
       }).join('') + '</div></section>';
     h += '<section class="band"><div class="band-h"><div><span class="lbl">03 · More</span><h2>더 넓게 보기<i>.</i></h2></div></div><div class="mgrid">' +
-      '<a class="mcard fx" href="#vs-all"><b>한눈에 표</b><small>11개 주제 × 네 사람의 한 줄 핵심을 표 하나에</small>' + ARROW + '</a>' +
+      '<a class="mcard fx" href="#vs-all"><b>한눈에 표</b><small>' + TOPICS.length + '개 주제 × ' + NW + ' 사람의 한 줄 핵심을 표 하나에</small>' + ARROW + '</a>' +
       '<a class="mcard fx" href="#vs-lin"><b>받은 영향과 물려준 유산</b><small>누구에게 배웠고, 누구에게 넘겨주었나</small>' + ARROW + '</a></div></section>';
     return h;
   }
   function glanceHTML(tp, tab) {
-    return '<section class="glance" aria-label="네 사람 한눈에"><div class="gl">' + ORDER.map(function (tid) {
+    return '<section class="glance" aria-label="' + NW + ' 사람 한눈에"><div class="gl" style="--gn:' + ORDER.length + '">' + ORDER.map(function (tid) {
       var sd = sidesOf(tp)[tid], t = T[tid];
       if (!sd) return '<div class="gcard off" style="--c:' + t.color + '"><span class="hd">' + mk(tid) + '<b>' + esc(t.short) + '</b></span><p>자료에서 직접 다루지 않습니다.</p></div>';
       return '<button type="button" class="gcard" data-tab="' + tid + '" aria-pressed="' + (tab === tid) + '" style="--c:' + t.color + '"><span class="hd">' + mk(tid) + '<b>' + esc(t.short) + '</b></span><p>' + inline(sd.key) + '</p></button>';
@@ -696,25 +707,34 @@
 
   /* ───────── 족보 ───────── */
   function viewExam() {
-    if (!EXAM) return '<header class="ex-head"><h1>족보</h1><p class="muted">족보 자료가 아직 없습니다.</p></header>';
+    if (!EXAMS.length) return '<header class="ex-head"><h1>족보</h1><p class="muted">족보 자료가 아직 없습니다.</p></header>';
     var only = S.exf === 'first', k = 0;
-    var h = '<header class="ex-head"><span class="lbl">Past exam</span><h1>족보<i>.</i></h1><p class="muted">' + esc(EXAM.title) + ' · ' + esc(EXAM.meta) + '</p><p class="ex-note">' + inline(EXAM.note || '') + '</p>' +
+    var h = '<header class="ex-head"><span class="lbl">Past exam</span><h1>족보<i>.</i></h1><p class="muted">시험지 ' + EXAMS.length + '개 · 문항 ' + allExamQs().length + '개. 지금 자료로 쓸 수 있는 문항에는 답안 설계를, 나머지에는 지금 자료와 이어지는 고리를 달았습니다.</p>' +
+      '<nav class="ex-jump" aria-label="시험지">' + EXAMS.map(function (ex) { return '<a class="chip" href="#exam.x-' + ex.id + '">' + esc(ex.title) + ' →</a>'; }).join('') + '</nav>' +
       '<div class="seg" role="group" aria-label="문항 거르기"><button type="button" data-f="all" aria-pressed="' + !only + '">모든 문항</button><button type="button" data-f="first" aria-pressed="' + only + '">지금 자료로 쓸 수 있는 문항만</button></div></header>';
-    var RL = { '1차': ['1차 범위', 'pink'], '2차': ['2차 범위', ''], '혼합': ['일부 1차', 'pink'] };
-    EXAM.parts.forEach(function (part) {
-      var qs = part.qs.filter(function (q) { return !only || q.range !== '2차'; });
-      if (!qs.length) return;
-      h += '<div class="part-h"><b>' + esc(part.kind) + '</b><small>' + esc(part.rule) + '</small></div>';
-      qs.forEach(function (q) {
-        var rl = RL[q.range] || ['', ''], tp = q.lens ? topicById(q.lens) : null, fresh = q.outline && S.earned['ex.' + q.n] == null;
-        h += '<article class="eq fx' + (q.range !== '2차' ? ' first' : '') + '" id="e' + q.n + '" style="--i:' + (k++) + '"><span class="n">' + two(+q.n || 0) + '</span><div><p class="tx0">' + esc(q.text) + '</p>' +
-          (q.subs ? '<ul class="subs">' + q.subs.map(function (s) { return '<li>' + esc(s) + '</li>'; }).join('') + '</ul>' : '') +
-          (q.box ? '<div class="box">' + esc(q.box) + '</div>' : '') +
-          '<div class="tags"><span class="chip ' + rl[1] + '">' + rl[0] + '</span>' + (q.thinkers || []).filter(function (t) { return T[t]; }).map(function (t) { return '<a class="chip" href="#t-' + t + '">' + esc(T[t].short) + '</a>'; }).join('') +
-          (tp ? '<a class="chip" href="#vs.' + tp.id + '">비교: ' + esc(tp.label) + ' →</a>' : '') + '</div>' +
-          (q.outline ? '<details><summary>' + (q.range === '2차' ? '1차 자료와 이어지는 부분' : '답안 설계 보기') + (fresh ? ' · +' + REWARD.ex + CR : '') + '</summary><div class="ol tx">' + blocks(q.outline, 'plain') + '</div></details>' : '') +
-          '</div></article>';
+    var RL = { '1차': ['지금 자료로 답할 수 있음', 'pink'], '2차': ['2차 범위', ''], '혼합': ['일부는 지금 자료로', 'pink'] };
+    EXAMS.forEach(function (ex) {
+      h += '<section class="exs" id="x-' + ex.id + '"><div class="exs-h"><span class="lbl">' + esc(ex.short || '') + '</span><h2>' + esc(ex.title) + '<i>.</i></h2><p class="muted">' + esc(ex.meta) + '</p>' +
+        (ex.strategy ? '<div class="strat"><b>시험 전략 · 수강자 후기</b><ul>' + ex.strategy.map(function (s) { return '<li>' + inline(s) + '</li>'; }).join('') + '</ul></div>' : '') +
+        '<p class="ex-note">' + inline(ex.note || '') + '</p></div>';
+      ex.parts.forEach(function (part) {
+        var qs = part.qs.filter(function (q) { return !only || q.range !== '2차'; });
+        if (!qs.length) return;
+        h += '<div class="part-h"><b>' + esc(part.kind) + '</b><small>' + esc(part.rule) + '</small></div>';
+        qs.forEach(function (q) {
+          var rl = RL[q.range] || ['', ''], tp = q.lens ? topicById(q.lens) : null, ol = outlineOf(q), sm = q.same && QBY[q.same], fresh = ol && S.earned['ex.' + q.id] == null;
+          h += '<article class="eq fx' + (q.range !== '2차' ? ' first' : '') + '" id="e' + q.id + '" style="--i:' + (k++) + '"><span class="n">' + two(+(q.no || q.n) || 0) + '</span><div>' + (q.no ? '<p class="qk">' + esc(q.label) + '</p>' : '') + (q.text ? '<p class="tx0">' + esc(q.text) + '</p>' : '') +
+            (q.subs ? '<ul class="subs">' + q.subs.map(function (s) { return '<li>' + esc(s) + '</li>'; }).join('') + '</ul>' : '') +
+            (q.box ? '<div class="box">' + esc(q.box) + '</div>' : '') +
+            (q.given ? '<div class="box given"><b>후기에 적힌 정답</b> ' + esc(q.given) + '</div>' : '') +
+            '<div class="tags"><span class="chip ' + rl[1] + '">' + rl[0] + '</span>' + (q.thinkers || []).filter(function (t) { return T[t]; }).map(function (t) { return '<a class="chip" href="#t-' + t + '">' + esc(T[t].short) + '</a>'; }).join('') +
+            (tp ? '<a class="chip" href="#vs.' + tp.id + '">비교: ' + esc(tp.label) + ' →</a>' : '') +
+            (sm ? '<a class="chip pink" href="#exam.e' + sm.id + '">' + esc(sm.ex.short + ' ' + sm.label) + '과 같은 문항 →</a>' : '') + '</div>' +
+            (ol ? '<details><summary>' + (q.range === '2차' ? '지금 자료와 이어지는 부분' : '답안 설계 보기') + (sm && !q.outline ? ' (' + esc(sm.ex.short + ' ' + sm.label) + ')' : '') + (fresh ? ' · +' + REWARD.ex + CR : '') + '</summary><div class="ol tx">' + blocks(ol, 'plain') + '</div></details>' : '') +
+            '</div></article>';
+        });
       });
+      h += '</section>';
     });
     return h;
   }
@@ -847,7 +867,7 @@
       Object.keys(sidesOf(tp)).forEach(function (k) { if (!T[k]) return; var sd = tp.sides[k]; IDX.push({ h: '#vs.' + tp.id + '.' + k, t: '비교 · ' + tp.label + ' · ' + T[k].short, x: plain(sd.key) + ' ' + (sd.tags || []).join(' ') + ' ' + slidePlain(sd.body) }); });
     });
     PAIRS.forEach(function (p) { if (T[p.a] && T[p.b]) IDX.push({ h: '#vs-pr.' + p.id, t: '비교 · ' + T[p.a].short + ' × ' + T[p.b].short + ' · ' + p.title, x: plain(p.line + ' ' + p.points.map(function (x) { return x.t + ' ' + x.a + ' ' + x.b + ' ' + (x.note || ''); }).join(' ')) }); });
-    if (EXAM) EXAM.parts.forEach(function (pt) { pt.qs.forEach(function (q) { IDX.push({ h: '#exam.e' + q.n, t: '족보 ' + q.n + '번', x: plain(q.text + ' ' + (q.box || '') + ' ' + (q.subs || []).join(' ') + ' ' + (q.outline || '')) }); }); });
+    allExamQs().forEach(function (q) { IDX.push({ h: '#exam.e' + q.id, t: '족보 · ' + q.ex.short + ' ' + q.label, x: plain(q.text + ' ' + (q.box || '') + ' ' + (q.given || '') + ' ' + (q.subs || []).join(' ') + ' ' + (q.outline || '')) }); });
   }
   function doSearch(q) {
     if (!IDX) buildIndex();
