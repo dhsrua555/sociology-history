@@ -31,7 +31,7 @@
 
   /* ───────── 저장 (이 브라우저에만, 실패해도 동작) ───────── */
   var KEY = 'sahak-v2';
-  var S = { read: {}, filt: { slide: 1, talk: 1, sum: 1, exam: 1, aux: 1 }, who: null, topic: '', exf: 'all', fs: 0, last: '', c: 0, earned: {}, owned: {}, look: {}, visit: null, name: '콩이', ctab: 'hat' };
+  var S = { read: {}, filt: { slide: 1, talk: 1, sum: 1, deep: 1, exam: 1, aux: 1 }, who: null, topic: '', exf: 'all', fs: 0, last: '', c: 0, earned: {}, owned: {}, look: {}, visit: null, name: '콩이', ctab: 'hat' };
   try {
     var raw = localStorage.getItem(KEY);
     if (raw) { var o = JSON.parse(raw); if (o && typeof o === 'object') Object.keys(o).forEach(function (k) { S[k] = o[k]; }); }
@@ -41,7 +41,8 @@
     }
   } catch (e) { }
   ['read', 'earned', 'owned', 'look'].forEach(function (k) { if (!S[k] || typeof S[k] !== 'object') S[k] = {}; });
-  if (!S.filt || typeof S.filt !== 'object') S.filt = { slide: 1, talk: 1, sum: 1, exam: 1, aux: 1 };
+  if (!S.filt || typeof S.filt !== 'object') S.filt = { slide: 1, talk: 1, sum: 1, deep: 1, exam: 1, aux: 1 };
+  if (S.filt.deep === undefined) S.filt.deep = 1;
   S.c = Math.max(0, +S.c || 0);
   if (typeof S.name !== 'string' || !S.name.trim()) S.name = '콩이';
   function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { } }
@@ -56,7 +57,7 @@
       .replace(/==(.+?)==/g, '<mark>$1</mark>')
       .replace(/(^|[^*\w])\*([^*\s][^*]*?)\*(?!\*)/g, '$1<em>$2</em>');
   }
-  function plain(s) { return String(s || '').replace(/^:::.*$/gm, ' ').replace(/^\[(big|flow|vs|cards|why|quote|table|note)\]/gm, ' ').replace(/ :: /g, ' ').replace(/^\|[-: |]+\|?\s*$/gm, ' ').replace(/\*\*|==|^#+\s|^>\s?|^\s*([-*]|\d+\.)\s/gm, ' ').replace(/[|*]/g, ' ').replace(/\s+/g, ' ').trim(); }
+  function plain(s) { return String(s || '').replace(/^:::.*$/gm, ' ').replace(/^\[(big|flow|vs|cards|why|quote|table|note)\]/gm, ' ').replace(/^@\s/gm, ' ').replace(/ :: /g, ' ').replace(/^\|[-: |]+\|?\s*$/gm, ' ').replace(/\*\*|==|^#+\s|^>\s?|^\s*([-*]|\d+\.)\s/gm, ' ').replace(/[|*]/g, ' ').replace(/\s+/g, ' ').trim(); }
   function cut(s, n) { s = plain(s); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
   function two(n) { return (n < 10 ? '0' : '') + n; }
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
@@ -192,7 +193,7 @@
     });
     if (!cells.length) return '';
     var head = cells.shift();
-    return '<div class="tbl"><table><thead><tr>' + head.map(function (c) { return '<th>' + inline(c) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+    return '<div class="tbl' + (head.length <= 2 ? ' narrow' : '') + '"><table><thead><tr>' + head.map(function (c) { return '<th>' + inline(c) + '</th>'; }).join('') + '</tr></thead><tbody>' +
       cells.map(function (r) { return '<tr>' + r.map(function (c) { return '<td>' + inline(c) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div>';
   }
   function list(items) {
@@ -221,14 +222,19 @@
       if (/^\|/.test(L)) { flush(); var rows = []; while (i < lines.length && /^\|/.test(lines[i])) rows.push(lines[i++]); html += table(rows); continue; }
       if (/^>\s?/.test(L)) { flush(); var q = []; while (i < lines.length && /^>\s?/.test(lines[i])) q.push(lines[i++].replace(/^>\s?/, '')); html += '<blockquote>' + q.map(inline).join('<br>') + '</blockquote>'; continue; }
       if (/^\s*([-*]|\d+\.)\s+/.test(L)) { flush(); var it = []; while (i < lines.length && /^\s*([-*]|\d+\.)\s+/.test(lines[i])) it.push(lines[i++]); html += list(it); continue; }
+      /* 상자 안의 시각 블록([flow]·[vs]…)과 출처 줄(@ 교재 · 강의 …) */
+      if (/^\[(big|flow|vs|cards|why|quote|table|note)\]/.test(L)) { flush(); var ch = []; while (i < lines.length && !/^\s*$/.test(lines[i])) ch.push(lines[i++]); html += '<div class="b-vis">' + slideHTML(ch.join('\n')) + '</div>'; continue; }
+      if ((m = L.match(/^@\s+(.*)$/))) { flush(); html += '<p class="srcs">' + m[1].split(/\s+·\s+/).map(srcChip).join('') + '</p>'; i++; continue; }
       pbuf.push(L.trim()); i++;
     }
     flush();
     return html;
   }
-  var KIND = { talk: ['b-talk', '강의 녹음'], slide: ['b-slide', '교안'], exam: ['b-exam', '시험 포인트'], link: ['b-aux b-link', '다른 사상가와 연결'], note: ['b-aux b-note', '참고'] };
+  var KIND = { talk: ['b-talk', '강의 녹음'], slide: ['b-slide', '교안'], deep: ['b-deep', '풀어 보기'], exam: ['b-exam', '시험 포인트'], link: ['b-aux b-link', '다른 사상가와 연결'], note: ['b-aux b-note', '참고'] };
   function callout(kind, meta, lines) {
     var k = KIND[kind] || KIND.note;
+    /* 풀어 보기: 개념 이름을 제목으로 크게 */
+    if (kind === 'deep') return '<div class="b b-deep"><div class="lab"><span class="k">' + k[1] + '</span></div>' + (meta ? '<p class="dt">' + inline(meta) + '</p>' : '') + '<div class="tx">' + inner(lines) + '</div></div>';
     return '<div class="b ' + k[0] + '"><div class="lab">' + (kind === 'talk' ? '<span class="rec" aria-hidden="true"></span>' : '') + '<span class="k">' + k[1] + '</span>' + (meta ? '<span>' + esc(meta) + '</span>' : '') + '</div><div class="tx">' + inner(lines) + '</div></div>';
   }
   /* mode 'lec': 콜아웃 밖 글은 '정리'(필터로 끌 수 있음), 'plain': 교재·답·리딩 본문 */
@@ -334,9 +340,11 @@
 
     var src = T[ORDER[0]] ? T[ORDER[0]].lecture.map(function (s) { return s.body; }).join('\n') : '';
     var sSlide = firstCallout(src, 'slide', 420), sTalk = firstCallout(src, 'talk', 360), sExam = firstCallout(src, 'exam', 560);
+    var sDeep = (function () { var m = /^:::\s*deep([^\n]*)\n([\s\S]*?)\n:::\s*$/m.exec(src); return m ? '::: deep' + m[1] + '\n' + m[2].split(/\n(?=### )/)[0] + '\n:::' : ''; })();
     h += '<section class="band"><div class="band-h"><div><span class="lbl">03 · How to read</span><h2>자료는 모양으로 구분됩니다<i>.</i></h2></div><p>강의 정리 화면의 ‘보기’에서 종류별로 켜고 끌 수 있습니다. 교안만 훑거나 시험 포인트만 모아 볼 수 있습니다.</p></div><div class="legend">' +
       (sSlide ? '<div class="item">' + blocks(sSlide, 'lec') + '<p>흰 상자 = 강의 교안 원문</p></div>' : '') +
       (sTalk ? '<div class="item">' + blocks(sTalk, 'lec') + '<p>분홍 세로선 = 강의 녹음 (녹음 파일 · 시각)</p></div>' : '') +
+      (sDeep ? '<div class="item">' + blocks(sDeep, 'lec') + '<p>연보라 상자 = 풀어 보기 (개념을 자료 안에서 차근차근 풀어 쓴 설명)</p></div>' : '') +
       (sExam ? '<div class="item">' + blocks(sExam, 'lec') + '<p>분홍 상자 = 족보와 이어지는 시험 포인트</p></div>' : '') +
       '</div></section>';
 
@@ -373,7 +381,7 @@
   }
 
   /* ───────── 사상가 페이지: 목록 + 한 절씩 ───────── */
-  var FK = [['slide', '교안', '#B9A6B2'], ['talk', '강의 녹음', 'var(--pink)'], ['sum', '정리', 'var(--ink-3)'], ['exam', '시험 포인트', '#FF8CC6'], ['aux', '연결·참고', 'var(--line-2)']];
+  var FK = [['slide', '교안', '#B9A6B2'], ['talk', '강의 녹음', 'var(--pink)'], ['sum', '정리', 'var(--ink-3)'], ['deep', '풀이', 'var(--lilac)'], ['exam', '시험 포인트', '#FF8CC6'], ['aux', '연결·참고', 'var(--line-2)']];
   var FS = ['보통', '크게', '더 크게'];
   function doneHTML(key) {
     var on = !!S.read[key], g = gainOf(key);
